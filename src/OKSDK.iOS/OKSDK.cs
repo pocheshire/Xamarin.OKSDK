@@ -1,6 +1,7 @@
 ﻿using System;
 using Foundation;
 using UIKit;
+using System.Linq;
 
 namespace OKSDK.iOS
 {
@@ -62,21 +63,21 @@ namespace OKSDK.iOS
 
         public delegate void OKCompletitionHandler(NSData data, NSError error);
 
-        #region String (OKConnection)
+        #region NSString (OKConnection)
 
-        private static string OK_MD5(this string self)
+        private static NSString OK_MD5(this NSString self)
         {
-            return string.Empty;
+            return new NSString("");
         }
 
-        private static string OK_Encode(this string self)
+        private static NSString OK_Encode(this NSString self)
         {
-            return string.Empty;
+            return new NSString("");
         }
 
-        private static string OK_Decode(this string self)
+        private static NSString OK_Decode(this NSString self)
         {
-            return string.Empty;
+            return new NSString("");
         }
 
         #endregion
@@ -86,7 +87,94 @@ namespace OKSDK.iOS
         private static NSMutableDictionary OK_Params(this NSUrl self)
         {
             var result = new NSMutableDictionary();
-            var pairs = 
+            var pairs = string.IsNullOrEmpty(self.Fragment) ? self.Query.Split('&') : self.Fragment.Split('&');
+            foreach (var pair in pairs)
+            {
+                var kv = pair.Split('=');
+                if (kv.Length == 2)
+                    result.Add(new NSString(kv[0]), new NSString(kv[1]));
+            }
+
+            return result;
+        }
+
+        #endregion
+
+        #region NSBundle (CFBundleURLTypes)
+
+        private static bool OK_HasRegisteredURLScheme (NSString urlScheme)
+        {
+            var urlTypes = NSBundle.MainBundle.ObjectForInfoDictionary("CFBundleURLTypes") as NSArray;
+
+
+            for (nuint i = 0; i < urlTypes.Count; i++)
+            {
+                var urlType = urlTypes.GetItem<NSDictionary>(i);
+                var urlSchemes = urlType.ValueForKey(new NSString("CFBundleURLSchemes")) as NSArray;
+
+                if (urlSchemes.Contains(urlScheme))
+                    return true;
+            }
+
+            return false;
+        }
+
+        #endregion
+
+        #region NSDictionary (OKConnection)
+
+        private static NSError OK_Error(this NSDictionary self)
+        {
+            if (self.ContainsKey(new NSString("error_code")))
+            {
+                return new NSError(new NSString(OK_API_ERROR_CODE_DOMAIN), (self["error_code"] as NSNumber).NIntValue, NSDictionary.FromObjectAndKey(self["error_msg"], new NSString("NSLocalizedDescriptionKey")));
+            }
+
+            if (self.ContainsKey(new NSString("error")))
+            {
+                return new NSError(new NSString(OK_API_ERROR_CODE_DOMAIN), -1, NSDictionary.FromObjectAndKey(self["error"], new NSString("NSLocalizedDescriptionKey")));
+            }
+
+            return null;
+        }
+
+        private static NSDictionary OK_Union (this NSDictionary self, NSDictionary dict)
+        {
+            var dictionary = new NSMutableDictionary(self);
+            dictionary.SetValuesForKeysWithDictionary(dict);
+            return dictionary;
+        }
+
+        private static NSString OK_QueryStringWithSignature (this NSDictionary self, NSString secretKey, NSString sigName)
+        {
+            var sigSource = new NSMutableString();
+            var queryString = new NSMutableString();
+
+            var sortedKeys = self.Keys.OrderBy((NSObject arg) => arg);
+            foreach (var key in sortedKeys)
+            {
+                var @value = self[key] as NSString;
+                sigSource.Append(NSString.LocalizedFormat(@"%@=%@\", key, value));
+                queryString.Append(NSString.LocalizedFormat(@"%@=%@&", key, value.OK_Encode()));
+            }
+
+            sigSource.Append(secretKey);
+            queryString.Append(NSString.LocalizedFormat(@"%@=%@&", sigName, sigSource.OK_MD5()));
+
+            return queryString;
+        }
+
+        private static NSString OK_QueryString (this NSDictionary self)
+        {
+    //        NSMutableString* queryString = [NSMutableString string];
+    //for (NSString* key in self) [queryString appendString:[NSString stringWithFormat: @"%@=%@&", [key ok_encode], [self[key] ok_encode]]];
+    //        return queryString;
+        }
+
+        private static NSString OK_JSON(this NSDictionary self, NSError error)
+        {
+            //NSData *data = [NSJSONSerialization dataWithJSONObject:self options:0 error:&error ];
+            //return data?[[NSString alloc] initWithData: data encoding:NSUTF8StringEncoding]:nil;
         }
 
         #endregion
